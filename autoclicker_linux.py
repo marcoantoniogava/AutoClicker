@@ -10,6 +10,13 @@ libXtst = ctypes.cdll.LoadLibrary("libXtst.so.6")
 
 Display_p = ctypes.c_void_p
 
+# XInitThreads: precisa ser chamado ANTES de qualquer outra função X11
+libX11.XInitThreads.argtypes = []
+libX11.XInitThreads.restype = ctypes.c_int
+init_result = libX11.XInitThreads()
+# Se quiser debugar:
+# print("XInitThreads result:", init_result)
+
 # XOpenDisplay
 libX11.XOpenDisplay.argtypes = [ctypes.c_char_p]
 libX11.XOpenDisplay.restype = Display_p
@@ -70,15 +77,21 @@ def is_key_pressed(display, keycode: int) -> bool:
 
 def click_loop(display, active_flag, running_flag, interval=0.1):
     """Thread que fica clicando enquanto active_flag[0] for True."""
-    while running_flag[0]:
-        if active_flag[0]:
-            # Botao 1 = clique esquerdo
-            libXtst.XTestFakeButtonEvent(display, 1, 1, 0)  # press
-            libXtst.XTestFakeButtonEvent(display, 1, 0, 0)  # release
-            libX11.XFlush(display)
-            time.sleep(interval)
-        else:
-            time.sleep(0.01)
+    try:
+        while running_flag[0]:
+            if active_flag[0]:
+                # Botão 1 = clique esquerdo
+                libXtst.XTestFakeButtonEvent(display, 1, 1, 0)  # press
+                libXtst.XTestFakeButtonEvent(display, 1, 0, 0)  # release
+                libX11.XFlush(display)
+                time.sleep(interval)
+            else:
+                time.sleep(0.01)
+    except Exception as e:
+        # Se der algum erro de X11 aqui, pelo menos não derruba o programa silenciosamente
+        print("Erro na thread de clique:", e)
+        running_flag[0] = False
+        active_flag[0] = False
 
 
 def main():
@@ -111,7 +124,7 @@ def main():
     print("=== Autoclicker Linux (X11) com hotkeys ===")
     print("F9  -> Liga/Desliga")
     print("F10 -> Sair")
-    print("Se não parar: abra outro terminal e rode 'pkill python3'.")
+    print("Se travar: abra outro terminal e rode 'pkill python3'.")
     print("---------------------------------------------")
 
     prev_toggle = False
@@ -144,7 +157,7 @@ def main():
         running_flag[0] = False
         active_flag[0] = False
 
-    t.join(timeout=0.2)
+    t.join(timeout=0.5)
 
 
 if __name__ == "__main__":
